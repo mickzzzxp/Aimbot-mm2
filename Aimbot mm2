@@ -1,0 +1,165 @@
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local UIS = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local StarterGui = game:GetService("StarterGui")
+local espEnabled = false
+
+local function Notify(msg)
+    pcall(function()
+        StarterGui:SetCore("SendNotification", {
+            Title = "MM2 Script";
+            Text = msg;
+            Duration = 3;
+        })
+    end)
+    print(msg)
+end
+
+local function EnableSilentAim()
+    Notify("Silent Aim Ativado!")
+end
+
+local espObjects = {}
+
+local function ClearESP()
+    for _, adornee in pairs(espObjects) do
+        if adornee and adornee.Parent then
+            adornee:Destroy()
+        end
+    end
+    espObjects = {}
+end
+
+local function CreateESP(player, color)
+    if player == LocalPlayer then return end
+    local char = player.Character
+    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+
+    local billboard = Instance.new("BillboardGui", char)
+    billboard.Name = "ESP_Billboard"
+    billboard.Adornee = char:FindFirstChild("HumanoidRootPart")
+    billboard.Size = UDim2.new(0, 100, 0, 40)
+    billboard.StudsOffset = Vector3.new(0, 3, 0)
+    billboard.AlwaysOnTop = true
+
+    local label = Instance.new("TextLabel", billboard)
+    label.Size = UDim2.new(1,0,1,0)
+    label.BackgroundTransparency = 1
+    label.Text = player.Name
+    label.TextColor3 = color
+    label.TextStrokeTransparency = 0.5
+    label.Font = Enum.Font.SourceSansBold
+    label.TextScaled = true
+
+    table.insert(espObjects, billboard)
+end
+
+local function ESP()
+    ClearESP()
+    for _, player in pairs(Players:GetPlayers()) do
+        local char = player.Character
+        if char then
+            local role = nil
+            if player.Backpack:FindFirstChild("Gun") or (char:FindFirstChild("GunDrop")) then
+                role = "Sheriff"
+            elseif char:FindFirstChild("Knife") then
+                role = "Murderer"
+            end
+
+            if role == "Murderer" then
+                CreateESP(player, Color3.new(1,0,0))
+            elseif role == "Sheriff" then
+                CreateESP(player, Color3.new(0,0,1))
+            end
+        end
+    end
+
+    -- GunDrop ESP
+    for _, item in pairs(workspace:GetChildren()) do
+        if item.Name == "GunDrop" then
+            local billboard = Instance.new("BillboardGui", item)
+            billboard.Name = "ESP_Billboard"
+            billboard.Adornee = item
+            billboard.Size = UDim2.new(0, 100, 0, 40)
+            billboard.StudsOffset = Vector3.new(0, 3, 0)
+            billboard.AlwaysOnTop = true
+
+            local label = Instance.new("TextLabel", billboard)
+            label.Size = UDim2.new(1,0,1,0)
+            label.BackgroundTransparency = 1
+            label.Text = "Gun"
+            label.TextColor3 = Color3.new(0,1,0)
+            label.TextStrokeTransparency = 0.5
+            label.Font = Enum.Font.SourceSansBold
+            label.TextScaled = true
+
+            table.insert(espObjects, billboard)
+        end
+    end
+end
+
+local function FindMurder()
+    for _, player in pairs(Players:GetPlayers()) do
+        local char = player.Character
+        if char and char:FindFirstChild("Knife") then
+            return char
+        end
+    end
+    return nil
+end
+
+local function HookSilentAim()
+    local char = LocalPlayer.Character
+    if not char then return end
+    local tool = char:FindFirstChild("Gun")
+    if not tool then
+        tool = LocalPlayer.Backpack:FindFirstChild("Gun")
+    end
+    if not tool then return end
+
+    -- Evita hook duplicado
+    if tool.__SilentAimHooked then return end
+    tool.__SilentAimHooked = true
+
+    local event = tool:FindFirstChildWhichIsA("RemoteEvent")
+    if event then
+        local oldFire = event.FireServer
+        event.FireServer = function(self, ...)
+            local MurderChar = FindMurder()
+            if MurderChar and MurderChar:FindFirstChild("HumanoidRootPart") then
+                local pos = MurderChar.HumanoidRootPart.Position
+                return oldFire(self, pos, pos)
+            else
+                return oldFire(self, ...)
+            end
+        end
+    end
+end
+
+UIS.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.G then
+        EnableSilentAim()
+    elseif input.KeyCode == Enum.KeyCode.E then
+        espEnabled = not espEnabled
+        if espEnabled then
+            Notify("ESP Ativado!")
+            ESP()
+        else
+            Notify("ESP Desativado!")
+            ClearESP()
+        end
+    end
+end)
+
+RunService.RenderStepped:Connect(function()
+    local char = LocalPlayer.Character
+    if not char then return end
+    if char:FindFirstChild("Gun") then
+        HookSilentAim()
+    end
+    if espEnabled then
+        ESP()
+    end
+end)
